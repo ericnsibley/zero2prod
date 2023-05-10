@@ -8,6 +8,20 @@ COPY . .
 # Compute a lock-like file for our project
 RUN cargo chef prepare --recipe-path recipe.json
 
+RUN update-ca-certificates
+
+# Create unpriviliged appuser
+ENV USER=app
+ENV UID=10001
+
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" \
+    "${USER}" \
 
 FROM chef as builder
 COPY --from=chef /app/recipe.json recipe.json
@@ -33,7 +47,12 @@ RUN apt-get update -y \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*
 
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
 COPY --from=builder /app/target/release/zero2prod zero2prod
 COPY configuration configuration
+
+USER app:app
+
 ENV APP_ENVIRONMENT production
 ENTRYPOINT ["./target/release/zero2prod"]
